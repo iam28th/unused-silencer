@@ -16,6 +16,7 @@ int hello() {
     std::ignore = ret;
 }
 ```
+2.1) check if `std::ignore` is available; include <utility> if it's not
 
 P.S. I'm actually curious how the second substitution will behave in these cases:
 ```cpp

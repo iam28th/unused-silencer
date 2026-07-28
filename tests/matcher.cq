@@ -1,0 +1,16 @@
+set bind-root false
+
+# 1 match (as expected)
+match compoundStmt(
+  hasParent(functionDecl())
+).bind("param")
+
+# 0 matches ?
+match parmVarDecl(
+  hasParent(functionDecl())
+).bind("param")
+
+# 2 matches (as expected)
+match parmVarDecl(
+  hasAncestor(functionDecl())
+).bind("param")

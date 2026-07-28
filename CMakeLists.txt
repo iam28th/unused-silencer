@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 4.3.3)
 project(silencer)
 
-set(DICTCHECK_LLVM_TOOLS_DIR "/usr/bin" CACHE PATH "Where llvm project binaries (clang, FileCheck, lit etc) are located. When using built-from-source llvm, this should point to llvm-project/{build-dir}/bin")
+set(SILENCER_LLVM_TOOLS_DIR "/usr/bin" CACHE PATH "Where llvm project binaries (clang, FileCheck, lit etc) are located. When using built-from-source llvm, this should point to llvm-project/{build-dir}/bin")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 17)
@@ -25,6 +25,6 @@ else ()
 	message(STATUS "rtti enabled")
 endif()
 
-set(DICTCHECK_PLUGIN_SONAME DictCheckPlugin_AstVisitor)
-add_subdirectory(src)
+set(SILENCER_PLUGIN_SONAME Silencer)
+add_subdirectory(lib)
 add_subdirectory(tests)

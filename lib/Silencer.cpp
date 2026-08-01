@@ -1,5 +1,6 @@
 #include "Silencer.h"
 
+#include <clang/AST/Decl.h>
 #include <clang/ASTMatchers/ASTMatchers.h>
 #include <clang/Frontend/FrontendPluginRegistry.h>
 #include <llvm/Support/raw_ostream.h>
@@ -7,37 +8,50 @@
 using namespace clang;
 using namespace ast_matchers;
 
-void ArgMatcher::run(const clang::ast_matchers::MatchFinder::MatchResult &Result) {
+void ParamHandler::run(const clang::ast_matchers::MatchFinder::MatchResult &Result) {
   /// Print name and location of the argument
   ASTContext *Ctx = Result.Context;
 
-  const ParmVarDecl *Param =
-      Result.Nodes.getNodeAs<clang::ParmVarDecl>("param");
-  assert(Param && "nullptr in matcher callback");
+  const FunctionDecl *Fn =
+      Result.Nodes.getNodeAs<clang::FunctionDecl>("fn");
+  assert(Fn && "nullptr in matcher callback");
 
   auto &SourceMgr = Rewriter.getSourceMgr();
-  SourceLocation Sloc = Param->getLocation();
 
-  llvm::outs() << "ArgMatcher: " << Param->getDeclName() << " at " <<
-    SourceMgr.getLineNumber(Sloc) << ":" << SourceMgr.getColumnNumber(Sloc) << '\n';
+  const int N = Fn->getNumParams();
+  for (int i = 0; i < N; ++i) {
+    const ParmVarDecl *Parm = Fn->getParamDecl(i);
+    if (Parm->isUsed())
+      continue;
+
+    SourceLocation ParmLoc = Parm->getLocation();
+    llvm::outs() << "ParmHandler: " << Parm->getDeclName() << " at " <<
+      SourceMgr.getLineNumber(ParmLoc) << ":" << SourceMgr.getColumnNumber(ParmLoc) << " is unused!";
+  }
 }
 
-void ArgMatcher::onEndOfTranslationUnit() {}
+void ParamHandler::onEndOfTranslationUnit() {}
 
 
-void LocalVarMatcher::run(const clang::ast_matchers::MatchFinder::MatchResult &) {}
-void LocalVarMatcher::onEndOfTranslationUnit() {}
+void LocalVarHandler::run(const clang::ast_matchers::MatchFinder::MatchResult &) {}
+void LocalVarHandler::onEndOfTranslationUnit() {}
 
 SilencerASTConsumer::SilencerASTConsumer(clang::Rewriter &Rewriter) :
-  ArgMatcher(Rewriter), LocalVarMatcher(Rewriter)
+  ParamHandler(Rewriter), LocalVarHandler(Rewriter)
 {
-  DeclarationMatcher ParamMatcher = parmVarDecl().bind("param");
-  // use hasAncestor for now and wait for reply at
-  // https://discourse.llvm.org/t/hasparent-ast-matcher-for-parmvardecl/91412
-  //
-  // just print for now, but later I guess...
-  // 1. ignore explicit object parameters
-  Finder.addMatcher(ParamMatcher, &ArgMatcher);
+  DeclarationMatcher FunctionMatcher = functionDecl(
+        isDefinition(),
+        unless(isImplicit()),
+        hasAnyParameter(anything())
+    ).bind("fn");
+  Finder.addMatcher(FunctionMatcher, &ParamHandler);
+
+  DeclarationMatcher LocVarMatcher = varDecl(
+      unless(parmVarDecl()),
+      isDefinition(),
+      hasAncestor(functionDecl(isDefinition()))
+  ).bind("var");
+  Finder.addMatcher(LocVarMatcher, &LocalVarHandler);
 }
 
 void SilencerASTConsumer::HandleTranslationUnit(clang::ASTContext &Ctx) {

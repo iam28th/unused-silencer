@@ -30,4 +30,10 @@ if (condition) { int ret = printf("hello world") }
 // 3
 if (int ret = printf("hello"); condition)
     printf(" world");
+
+// 4
+int x, y; // both unused
+
+// 5
+int x, y, z; // only y is unused
 ```

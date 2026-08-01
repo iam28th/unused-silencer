@@ -6,10 +6,10 @@
 #include <clang/Rewrite/Core/Rewriter.h>
 
 #if 1
-class ArgMatcher
+class ParamHandler
     : public clang::ast_matchers::MatchFinder::MatchCallback {
 public:
-  ArgMatcher(clang::Rewriter &Rewriter) : Rewriter(Rewriter) {}
+  ParamHandler(clang::Rewriter &Rewriter) : Rewriter(Rewriter) {}
 
   // Executes whenever the Matcher in SilencerASTConsumer matches.
   void run(const clang::ast_matchers::MatchFinder::MatchResult &) override;
@@ -26,10 +26,10 @@ private:
   llvm::SmallSet<clang::FullSourceLoc, 8> EditedLocations;
 };
 
-class LocalVarMatcher
+class LocalVarHandler
     : public clang::ast_matchers::MatchFinder::MatchCallback {
 public:
-  LocalVarMatcher(clang::Rewriter &Rewriter) : Rewriter(Rewriter) {}
+  LocalVarHandler(clang::Rewriter &Rewriter) : Rewriter(Rewriter) {}
 
   void run(const clang::ast_matchers::MatchFinder::MatchResult &) override;
   void onEndOfTranslationUnit() override;
@@ -50,6 +50,6 @@ public:
 private:
   clang::ast_matchers::MatchFinder Finder;
 
-  ArgMatcher ArgMatcher;
-  LocalVarMatcher LocalVarMatcher;
+  ParamHandler ParamHandler;
+  LocalVarHandler LocalVarHandler;
 };

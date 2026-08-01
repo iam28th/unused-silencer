@@ -1,18 +1,31 @@
+int func(int x, int y);
+
 int func(int x, int y) {
+  int z = 0;
+  static int z1 = 0;
+
   x += y;
   return x;
 }
 
-// int func(int x, int y, int z) { // z isn't used, should flag
-//   x += y;
-//   return x;
-// }
-//
-// int func2(int x, int y); // declaration only, shouldn't flag
-//
-// int main() {
-//   int a = 0; // a is used
-//
-//   int b = a + 1; // b is not, so should add std::ignore b below
-//   return 0;
-// }
+#if 1
+struct ClsWithInlineMethods
+{
+  ClsWithInlineMethods(int x) { };
+  int foo(int x) { return 0; }
+};
+
+struct Cls
+{
+  Cls(int x);
+  int foo(int x);
+};
+Cls::Cls(int x) { }
+int Cls::foo(int x) { return 0; }
+
+template <typename T>
+T templateFunc(int x){
+  int locvar;
+  return T{};
+}
+#endif

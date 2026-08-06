@@ -25,19 +25,33 @@ void ParamHandler::run(const clang::ast_matchers::MatchFinder::MatchResult &Resu
       continue;
 
     SourceLocation ParmLoc = Parm->getLocation();
+
+    // construct fixit...
+    auto Name = Parm->getNameAsString();
+    std::string FixItString = (Twine("/*") + Name + ("*/")).str();
+
+    FixItHint FixItHint = FixItHint::CreateReplacement(
+      SourceRange(ParmLoc, ParmLoc.getLocWithOffset(Name.size())), FixItString);
+
+#if 1
+    DiagnosticsEngine &DiagEngine = Ctx->getDiagnostics();
+    unsigned DiagID = DiagEngine.getCustomDiagID(DiagnosticsEngine::Warning,
+                                                 "unused argument");
+    DiagEngine.Report(Parm->getLocation(), DiagID).AddFixItHint(FixItHint);;
+#else
     llvm::outs() << "ParmHandler: " << Parm->getDeclName() << " at " <<
-      SourceMgr.getLineNumber(ParmLoc) << ":" << SourceMgr.getColumnNumber(ParmLoc) << " is unused!";
+      SourceMgr.getLineNumber(ParmLoc) << ":" << SourceMgr.getColumnNumber(ParmLoc) << " is unused!\n";
+#endif
   }
 }
 
 void ParamHandler::onEndOfTranslationUnit() {}
 
-
 void LocalVarHandler::run(const clang::ast_matchers::MatchFinder::MatchResult &) {}
 void LocalVarHandler::onEndOfTranslationUnit() {}
 
 SilencerASTConsumer::SilencerASTConsumer(clang::Rewriter &Rewriter) :
-  ParamHandler(Rewriter), LocalVarHandler(Rewriter)
+  Rewriter(Rewriter), ParamHandler(Rewriter), LocalVarHandler(Rewriter)
 {
   DeclarationMatcher FunctionMatcher = functionDecl(
         isDefinition(),
@@ -56,6 +70,9 @@ SilencerASTConsumer::SilencerASTConsumer(clang::Rewriter &Rewriter) :
 
 void SilencerASTConsumer::HandleTranslationUnit(clang::ASTContext &Ctx) {
   Finder.matchAST(Ctx);
+
+  // Write to file if it's modified inplace;
+  // otherwise we should just use diagnostics + fixit hints?
 }
 
 class LACPluginAction : public PluginASTAction {
@@ -70,6 +87,13 @@ public:
                                                  StringRef file) override {
     Rewriter.setSourceMgr(CI.getSourceManager(), CI.getLangOpts());
     return std::make_unique<SilencerASTConsumer>(Rewriter);
+  }
+
+  void EndSourceFileAction() override {
+#if 1
+  Rewriter.getEditBuffer(Rewriter.getSourceMgr().getMainFileID())
+      .write(llvm::outs());
+#endif
   }
 
 private:

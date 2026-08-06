@@ -49,6 +49,7 @@ public:
 
 private:
   clang::ast_matchers::MatchFinder Finder;
+  clang::Rewriter &Rewriter;
 
   ParamHandler ParamHandler;
   LocalVarHandler LocalVarHandler;

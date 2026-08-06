@@ -35,6 +35,8 @@ CLANG_FOR_TESTS := $(CLANG)
 run: build
 	$(CLANG_FOR_TESTS) -c \
 		-fdiagnostics-color=always \
+		-Xclang -fixit \
+		-Xclang -fdiagnostics-parseable-fixits \
 		-Xclang -load -Xclang $(PLUGIN) -Xclang -plugin -Xclang $(plugin_name) \
 		$(input) 2>&1 | c++filt
 

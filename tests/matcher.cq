@@ -1,16 +1,26 @@
 set bind-root false
 
-# in callback, iterate over arguments and check if they're used
-match functionDecl(
-  isDefinition(),
-  unless(isImplicit()),
-  hasAnyParameter(anything())
-).bind("fn")
+# parameters in function definition
+# match functionDecl(
+#   isDefinition(),
+#   unless(isImplicit()),
+#   hasAnyParameter(anything())
+# ).bind("fn")
 
+let declInIfStmt varDecl(
+  hasParent(
+    declStmt(hasParent(ifStmt()))
+  )
+).bind("varInIf")
+
+# all local variables
 match varDecl(
   unless(parmVarDecl()),
+  unless(declInIfStmt),
   isDefinition(),
   hasAncestor(
     functionDecl(isDefinition())
   )
-).bind("var")
+).bind("normalVar")
+
+match declInIfStmt

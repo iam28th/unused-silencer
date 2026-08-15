@@ -6,7 +6,6 @@
 #include <clang/Frontend/FrontendAction.h>
 #include <clang/Rewrite/Core/Rewriter.h>
 
-#if 1
 class ParamHandler : public clang::ast_matchers::MatchFinder::MatchCallback {
 public:
   ParamHandler(clang::Rewriter &Rewriter) : Rewriter(Rewriter) {}
@@ -14,31 +13,31 @@ public:
   // Executes whenever the Matcher in SilencerASTConsumer matches.
   void run(const clang::ast_matchers::MatchFinder::MatchResult &) override;
 
-  // Callback that's executed at the end of the translation unit
-  //
-  // ...I wonder what we do here, especially since we have mutliple callbacks...
-  // my current guess is 'nothing', and do stuff in HandleTranslationUnit
-  // instead
-  void onEndOfTranslationUnit() override;
-
 private:
   clang::Rewriter &Rewriter;
-  llvm::SmallSet<clang::FullSourceLoc, 8> EditedLocations;
 };
 
-class LocalVarHandler : public clang::ast_matchers::MatchFinder::MatchCallback {
+class CompoundStmtVarHandler
+    : public clang::ast_matchers::MatchFinder::MatchCallback {
 public:
-  LocalVarHandler(clang::Rewriter &Rewriter) : Rewriter(Rewriter) {}
+  CompoundStmtVarHandler(clang::Rewriter &Rewriter) : Rewriter(Rewriter) {}
 
   void run(const clang::ast_matchers::MatchFinder::MatchResult &) override;
-  void onEndOfTranslationUnit() override;
 
 private:
   clang::Rewriter &Rewriter;
-  llvm::SmallSet<clang::FullSourceLoc, 8> EditedLocations;
 };
 
-#endif
+class IfStmtVarHandler
+    : public clang::ast_matchers::MatchFinder::MatchCallback {
+public:
+  IfStmtVarHandler(clang::Rewriter &Rewriter) : Rewriter(Rewriter) {}
+
+  void run(const clang::ast_matchers::MatchFinder::MatchResult &) override;
+
+private:
+  clang::Rewriter &Rewriter;
+};
 
 class SilencerASTConsumer : public clang::ASTConsumer {
 public:
@@ -51,7 +50,8 @@ private:
   clang::Rewriter &Rewriter;
 
   ParamHandler ParamHandler;
-  LocalVarHandler LocalVarHandler;
+  IfStmtVarHandler IfStmtVarHandler;
+  CompoundStmtVarHandler CompoundStmtVarHandler;
 };
 
 class SilencerPluginAction : public clang::PluginASTAction {
@@ -68,4 +68,5 @@ public:
 
 private:
   clang::Rewriter Rewriter;
+  bool ModifyInputInplace = false;
 };

@@ -44,26 +44,36 @@ void ParamHandler::run(
   }
 }
 
-void ParamHandler::onEndOfTranslationUnit() {}
+void CompoundStmtVarHandler::run(
+    const clang::ast_matchers::MatchFinder::MatchResult &) {
+  llvm::outs() << "compound stmt matched!\n";
+  // TODO
+}
 
-void LocalVarHandler::run(
-    const clang::ast_matchers::MatchFinder::MatchResult &) {}
-void LocalVarHandler::onEndOfTranslationUnit() {}
+void IfStmtVarHandler::run(
+    const clang::ast_matchers::MatchFinder::MatchResult &) {
+  llvm::outs() << "if stmt matched!\n";
+  // TODO
+}
 
 SilencerASTConsumer::SilencerASTConsumer(clang::Rewriter &Rewriter)
-    : Rewriter(Rewriter), ParamHandler(Rewriter), LocalVarHandler(Rewriter) {
+    : Rewriter(Rewriter), ParamHandler(Rewriter), IfStmtVarHandler(Rewriter),
+      CompoundStmtVarHandler(Rewriter) {
   DeclarationMatcher FunctionMatcher =
       functionDecl(isDefinition(), unless(isImplicit()),
                    hasAnyParameter(anything()))
           .bind("fn");
   Finder.addMatcher(FunctionMatcher, &ParamHandler);
-#if 0
-  DeclarationMatcher LocVarMatcher =
-      varDecl(unless(parmVarDecl()), isDefinition(),
+
+  DeclarationMatcher VarInIf =
+      varDecl(hasParent(declStmt(hasParent(ifStmt())))).bind("varInIf");
+  Finder.addMatcher(VarInIf, &IfStmtVarHandler);
+
+  DeclarationMatcher VarInCompound =
+      varDecl(unless(parmVarDecl()), unless(VarInIf), isDefinition(),
               hasAncestor(functionDecl(isDefinition())))
-          .bind("var");
-  Finder.addMatcher(LocVarMatcher, &LocalVarHandler);
-#endif
+          .bind("varInCompound");
+  Finder.addMatcher(VarInCompound, &CompoundStmtVarHandler);
 }
 
 void SilencerASTConsumer::HandleTranslationUnit(clang::ASTContext &Ctx) {
@@ -71,7 +81,12 @@ void SilencerASTConsumer::HandleTranslationUnit(clang::ASTContext &Ctx) {
 }
 
 bool SilencerPluginAction::ParseArgs(const CompilerInstance &,
-                                     const std::vector<std::string> &) {
+                                     const std::vector<std::string> &args) {
+  for (const auto &arg : args) {
+    if (arg == "inplace") {
+      ModifyInputInplace = true;
+    }
+  }
   return true;
 }
 
@@ -83,11 +98,12 @@ SilencerPluginAction::CreateASTConsumer(clang::CompilerInstance &CI,
 }
 
 void SilencerPluginAction::EndSourceFileAction() {
-#if 1
-  /// Rewriter.getEditBuffer(Rewriter.getSourceMgr().getMainFileID())
-  ///     .write(llvm::outs());
-  Rewriter.overwriteChangedFiles();
-#endif
+  if (ModifyInputInplace) {
+    Rewriter.overwriteChangedFiles();
+  } else {
+    Rewriter.getEditBuffer(Rewriter.getSourceMgr().getMainFileID())
+        .write(llvm::outs());
+  }
 }
 
 //-----------------------------------------------------------------------------

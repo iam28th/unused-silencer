@@ -2,18 +2,20 @@
 
 #include <clang/AST/Decl.h>
 #include <clang/ASTMatchers/ASTMatchers.h>
+#include <clang/Frontend/FrontendAction.h>
 #include <clang/Frontend/FrontendPluginRegistry.h>
 #include <llvm/Support/raw_ostream.h>
 
 using namespace clang;
 using namespace ast_matchers;
 
-void ParamHandler::run(const clang::ast_matchers::MatchFinder::MatchResult &Result) {
+void ParamHandler::run(
+    const clang::ast_matchers::MatchFinder::MatchResult &Result) {
+
   /// Print name and location of the argument
   ASTContext *Ctx = Result.Context;
 
-  const FunctionDecl *Fn =
-      Result.Nodes.getNodeAs<clang::FunctionDecl>("fn");
+  const FunctionDecl *Fn = Result.Nodes.getNodeAs<clang::FunctionDecl>("fn");
   assert(Fn && "nullptr in matcher callback");
 
   auto &SourceMgr = Rewriter.getSourceMgr();
@@ -28,81 +30,70 @@ void ParamHandler::run(const clang::ast_matchers::MatchFinder::MatchResult &Resu
 
     // construct fixit...
     auto Name = Parm->getNameAsString();
-    std::string FixItString = (Twine("/*") + Name + ("*/")).str();
+    const std::string FixItString = (Twine("/*") + Name + ("*/")).str();
 
     FixItHint FixItHint = FixItHint::CreateReplacement(
-      SourceRange(ParmLoc, ParmLoc.getLocWithOffset(Name.size())), FixItString);
+        SourceRange(ParmLoc, ParmLoc.getLocWithOffset(Name.size())),
+        FixItString);
 
-#if 1
     DiagnosticsEngine &DiagEngine = Ctx->getDiagnostics();
     unsigned DiagID = DiagEngine.getCustomDiagID(DiagnosticsEngine::Warning,
                                                  "unused argument");
-    DiagEngine.Report(Parm->getLocation(), DiagID).AddFixItHint(FixItHint);;
-#else
-    llvm::outs() << "ParmHandler: " << Parm->getDeclName() << " at " <<
-      SourceMgr.getLineNumber(ParmLoc) << ":" << SourceMgr.getColumnNumber(ParmLoc) << " is unused!\n";
-#endif
+    DiagEngine.Report(Parm->getLocation(), DiagID).AddFixItHint(FixItHint);
+    Rewriter.ReplaceText(ParmLoc, Name.length(), FixItString);
   }
 }
 
 void ParamHandler::onEndOfTranslationUnit() {}
 
-void LocalVarHandler::run(const clang::ast_matchers::MatchFinder::MatchResult &) {}
+void LocalVarHandler::run(
+    const clang::ast_matchers::MatchFinder::MatchResult &) {}
 void LocalVarHandler::onEndOfTranslationUnit() {}
 
-SilencerASTConsumer::SilencerASTConsumer(clang::Rewriter &Rewriter) :
-  Rewriter(Rewriter), ParamHandler(Rewriter), LocalVarHandler(Rewriter)
-{
-  DeclarationMatcher FunctionMatcher = functionDecl(
-        isDefinition(),
-        unless(isImplicit()),
-        hasAnyParameter(anything())
-    ).bind("fn");
+SilencerASTConsumer::SilencerASTConsumer(clang::Rewriter &Rewriter)
+    : Rewriter(Rewriter), ParamHandler(Rewriter), LocalVarHandler(Rewriter) {
+  DeclarationMatcher FunctionMatcher =
+      functionDecl(isDefinition(), unless(isImplicit()),
+                   hasAnyParameter(anything()))
+          .bind("fn");
   Finder.addMatcher(FunctionMatcher, &ParamHandler);
-
-  DeclarationMatcher LocVarMatcher = varDecl(
-      unless(parmVarDecl()),
-      isDefinition(),
-      hasAncestor(functionDecl(isDefinition()))
-  ).bind("var");
+#if 0
+  DeclarationMatcher LocVarMatcher =
+      varDecl(unless(parmVarDecl()), isDefinition(),
+              hasAncestor(functionDecl(isDefinition())))
+          .bind("var");
   Finder.addMatcher(LocVarMatcher, &LocalVarHandler);
+#endif
 }
 
 void SilencerASTConsumer::HandleTranslationUnit(clang::ASTContext &Ctx) {
   Finder.matchAST(Ctx);
-
-  // Write to file if it's modified inplace;
-  // otherwise we should just use diagnostics + fixit hints?
 }
 
-class LACPluginAction : public PluginASTAction {
-public:
-  bool ParseArgs(const CompilerInstance &,
-                 const std::vector<std::string> &) override {
-    return true;
-  }
+bool SilencerPluginAction::ParseArgs(const CompilerInstance &,
+                                     const std::vector<std::string> &) {
+  return true;
+}
 
-  // Returns our ASTConsumer per translation unit.
-  std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI,
-                                                 StringRef file) override {
-    Rewriter.setSourceMgr(CI.getSourceManager(), CI.getLangOpts());
-    return std::make_unique<SilencerASTConsumer>(Rewriter);
-  }
+std::unique_ptr<clang::ASTConsumer>
+SilencerPluginAction::CreateASTConsumer(clang::CompilerInstance &CI,
+                                        llvm::StringRef file) {
+  Rewriter.setSourceMgr(CI.getSourceManager(), CI.getLangOpts());
+  return std::make_unique<SilencerASTConsumer>(Rewriter);
+}
 
-  void EndSourceFileAction() override {
+void SilencerPluginAction::EndSourceFileAction() {
 #if 1
-  Rewriter.getEditBuffer(Rewriter.getSourceMgr().getMainFileID())
-      .write(llvm::outs());
+  /// Rewriter.getEditBuffer(Rewriter.getSourceMgr().getMainFileID())
+  ///     .write(llvm::outs());
+  Rewriter.overwriteChangedFiles();
 #endif
-  }
-
-private:
-  Rewriter Rewriter;
-};
+}
 
 //-----------------------------------------------------------------------------
 // Registration
 //-----------------------------------------------------------------------------
-static FrontendPluginRegistry::Add<LACPluginAction>
+static FrontendPluginRegistry::Add<SilencerPluginAction>
     X(/*Name=*/"silencer",
-      /*Desc=*/"Rewrites code so that there's no warning about unused local variables or function args");
+      /*Desc=*/"Rewrites code so that there's no warning about unused local "
+               "variables or function args");

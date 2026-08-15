@@ -8,24 +8,19 @@ int func(int x, int y) {
   return x;
 }
 
-#if 1
-struct ClsWithInlineMethods
-{
-  ClsWithInlineMethods(int x) { };
+struct ClsWithInlineMethods {
+  ClsWithInlineMethods(int x) {};
   int foo(int x) { return 0; }
 };
 
-struct Cls
-{
+struct Cls {
   Cls(int x);
   int foo(int x);
 };
-Cls::Cls(int x) { }
+Cls::Cls(int x) {}
 int Cls::foo(int x) { return 0; }
 
-template <typename T>
-T templateFunc(int x){
+template <typename T> T templateFunc(int x) {
   int locvar;
   return T{};
 }
-#endif

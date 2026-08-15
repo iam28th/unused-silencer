@@ -3,11 +3,11 @@
 #include <clang/AST/ASTConsumer.h>
 #include <clang/ASTMatchers/ASTMatchFinder.h>
 #include <clang/ASTMatchers/ASTMatchers.h>
+#include <clang/Frontend/FrontendAction.h>
 #include <clang/Rewrite/Core/Rewriter.h>
 
 #if 1
-class ParamHandler
-    : public clang::ast_matchers::MatchFinder::MatchCallback {
+class ParamHandler : public clang::ast_matchers::MatchFinder::MatchCallback {
 public:
   ParamHandler(clang::Rewriter &Rewriter) : Rewriter(Rewriter) {}
 
@@ -26,8 +26,7 @@ private:
   llvm::SmallSet<clang::FullSourceLoc, 8> EditedLocations;
 };
 
-class LocalVarHandler
-    : public clang::ast_matchers::MatchFinder::MatchCallback {
+class LocalVarHandler : public clang::ast_matchers::MatchFinder::MatchCallback {
 public:
   LocalVarHandler(clang::Rewriter &Rewriter) : Rewriter(Rewriter) {}
 
@@ -53,4 +52,20 @@ private:
 
   ParamHandler ParamHandler;
   LocalVarHandler LocalVarHandler;
+};
+
+class SilencerPluginAction : public clang::PluginASTAction {
+public:
+  bool ParseArgs(const clang::CompilerInstance &,
+                 const std::vector<std::string> &) override;
+
+  // Returns our ASTConsumer per translation unit.
+  std::unique_ptr<clang::ASTConsumer>
+  CreateASTConsumer(clang::CompilerInstance &CI, llvm::StringRef file) override;
+
+  /// A hook that runs after TU was finished
+  void EndSourceFileAction() override;
+
+private:
+  clang::Rewriter Rewriter;
 };

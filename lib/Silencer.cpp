@@ -11,8 +11,6 @@ using namespace ast_matchers;
 
 void ParamHandler::run(
     const clang::ast_matchers::MatchFinder::MatchResult &Result) {
-
-  /// Print name and location of the argument
   ASTContext *Ctx = Result.Context;
 
   const FunctionDecl *Fn = Result.Nodes.getNodeAs<clang::FunctionDecl>("fn");
@@ -45,9 +43,30 @@ void ParamHandler::run(
 }
 
 void CompoundStmtVarHandler::run(
-    const clang::ast_matchers::MatchFinder::MatchResult &) {
-  llvm::outs() << "compound stmt matched!\n";
-  // TODO
+    const clang::ast_matchers::MatchFinder::MatchResult &Result) {
+  ASTContext *Ctx = Result.Context;
+
+  const VarDecl *Var = Result.Nodes.getNodeAs<clang::VarDecl>("varInCompound");
+  assert(Var && "nullptr in matcher callback");
+  if (Var->isUsed())
+    return;
+
+  DiagnosticsEngine &DiagEngine = Ctx->getDiagnostics();
+  unsigned DiagID =
+      DiagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "unused variable");
+  auto DiagBilder = DiagEngine.Report(Var->getLocation(), DiagID);
+
+  const std::string FixItString =
+      (Twine("(void)") + Var->getNameAsString() + (";")).str();
+
+  const auto *Init = Var->getInit();
+  if (Init) {
+    FixItHint Hint =
+        FixItHint::CreateReplacement(Init->getEndLoc(), FixItString);
+    DiagBilder.AddFixItHint(Hint);
+  } else {
+    llvm::outs() << "no init!\n";
+  }
 }
 
 void IfStmtVarHandler::run(
@@ -63,14 +82,15 @@ SilencerASTConsumer::SilencerASTConsumer(clang::Rewriter &Rewriter)
       functionDecl(isDefinition(), unless(isImplicit()),
                    hasAnyParameter(anything()))
           .bind("fn");
-  Finder.addMatcher(FunctionMatcher, &ParamHandler);
+  // Finder.addMatcher(FunctionMatcher, &ParamHandler);
 
   DeclarationMatcher VarInIf =
       varDecl(hasParent(declStmt(hasParent(ifStmt())))).bind("varInIf");
-  Finder.addMatcher(VarInIf, &IfStmtVarHandler);
+  // Finder.addMatcher(VarInIf, &IfStmtVarHandler);
 
   DeclarationMatcher VarInCompound =
       varDecl(unless(parmVarDecl()), unless(VarInIf), isDefinition(),
+              hasParent(declStmt().bind("parent")),
               hasAncestor(functionDecl(isDefinition())))
           .bind("varInCompound");
   Finder.addMatcher(VarInCompound, &CompoundStmtVarHandler);

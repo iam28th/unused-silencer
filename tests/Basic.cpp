@@ -3,7 +3,7 @@
 int func(int x, int y);
 
 int func(int x, int y) {
-  int z = 0;
+  int z = func(x, y);
   static int z1 = 0;
 
   x += y;

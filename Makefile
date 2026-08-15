@@ -45,9 +45,9 @@ run: build
 	$(CLANG_FOR_TESTS) -c \
 		-fdiagnostics-color=always \
 		-Xclang -load -Xclang $(PLUGIN) -Xclang -plugin -Xclang $(plugin_name) \
-		-Xclang -fixit \
 		$(input) 2>&1 | c++filt
 
+# -fplugin-arg-$(plugin_name)-inplace \
 
 # -Xclang -load -Xclang $(PLUGIN) -Xclang -plugin -Xclang $(plugin_name) \
 

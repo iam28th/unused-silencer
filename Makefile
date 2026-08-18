@@ -2,8 +2,8 @@
 
 .SHELLFLAGS := -o pipefail -c
 
-LLVM_DIR ?= ../llvm-project/build
-LLVM_TOOLS_DIR ?= $(shell readlink -f ../llvm-project/build/bin)
+LLVM_DIR ?= /usr/bin
+LLVM_TOOLS_DIR ?= /usr/bin
 CLANG_FOR_TESTS ?= $(LLVM_TOOLS_DIR)/clang
 
 PLUGIN := build/lib/libSilencer.so
@@ -32,15 +32,6 @@ build: conf
 plugin_name := silencer
 input := tests/Basic.cpp
 
-# run: build
-# 	$(CLANG_FOR_TESTS) -c \
-# 		-fdiagnostics-color=always \
-# 		-Xclang -fdiagnostics-parseable-fixits \
-# 		-Xclang -load -Xclang $(PLUGIN) -Xclang -plugin -Xclang $(plugin_name) \
-# 		-Wreorder \
-# 		-Xclang -fixit \
-# 		$(input) 2>&1 | c++filt
-
 run: build
 	$(CLANG_FOR_TESTS) -c \
 		-fdiagnostics-color=always \
@@ -48,8 +39,6 @@ run: build
 		$(input) 2>&1 | c++filt
 
 # -fplugin-arg-$(plugin_name)-inplace \
-
-# -Xclang -load -Xclang $(PLUGIN) -Xclang -plugin -Xclang $(plugin_name) \
 
 ast:
 	clang -Xclang -ast-dump -fsyntax-only $(input)

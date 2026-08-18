@@ -1,16 +1,20 @@
 #include "Silencer.h"
 
-#include <clang/AST/Decl.h>
 #include <clang/ASTMatchers/ASTMatchers.h>
 #include <clang/Frontend/FrontendAction.h>
 #include <clang/Frontend/FrontendPluginRegistry.h>
+#include <clang/Lex/Lexer.h>
 #include <llvm/Support/raw_ostream.h>
 
 using namespace clang;
 using namespace ast_matchers;
 
-void ParamHandler::run(
-    const clang::ast_matchers::MatchFinder::MatchResult &Result) {
+using MatchResult = clang::ast_matchers::MatchFinder::MatchResult;
+
+constexpr static char VAR_BINDING[] = "var";
+constexpr static char PARENT_BINDING[] = "parent";
+
+void ParamHandler::run(const MatchResult &Result) {
   ASTContext *Ctx = Result.Context;
 
   const FunctionDecl *Fn = Result.Nodes.getNodeAs<clang::FunctionDecl>("fn");
@@ -42,58 +46,75 @@ void ParamHandler::run(
   }
 }
 
-void CompoundStmtVarHandler::run(
-    const clang::ast_matchers::MatchFinder::MatchResult &Result) {
-  ASTContext *Ctx = Result.Context;
-
-  const VarDecl *Var = Result.Nodes.getNodeAs<clang::VarDecl>("varInCompound");
+static void handleUnusedDeclaration(const MatchResult &Result, bool inIf,
+                                    clang::Rewriter &Rewriter) {
+  const VarDecl *Var = Result.Nodes.getNodeAs<clang::VarDecl>(VAR_BINDING);
   assert(Var && "nullptr in matcher callback");
-  if (Var->isUsed())
+  if (Var->isReferenced())
     return;
+
+  const DeclStmt *Parent =
+      Result.Nodes.getNodeAs<clang::DeclStmt>(PARENT_BINDING);
+  assert(Parent && "parent can't be null");
+
+  const std::string SuggestedFixString =
+      (Twine(" (void)") + Var->getNameAsString() + (inIf ? "," : ";")).str();
+
+  ASTContext *Ctx = Result.Context;
+  const auto &SM = Ctx->getSourceManager();
+  auto InsertLoc = Lexer::getLocForEndOfToken(Parent->getEndLoc(), 0, SM,
+                                              Ctx->getLangOpts());
+  FixItHint Hint = FixItHint::CreateInsertion(InsertLoc, SuggestedFixString);
 
   DiagnosticsEngine &DiagEngine = Ctx->getDiagnostics();
   unsigned DiagID =
       DiagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "unused variable");
-  auto DiagBilder = DiagEngine.Report(Var->getLocation(), DiagID);
 
-  const std::string FixItString =
-      (Twine("(void)") + Var->getNameAsString() + (";")).str();
+  DiagEngine.Report(Var->getLocation(), DiagID).AddFixItHint(Hint);
 
-  const auto *Init = Var->getInit();
-  if (Init) {
-    FixItHint Hint =
-        FixItHint::CreateReplacement(Init->getEndLoc(), FixItString);
-    DiagBilder.AddFixItHint(Hint);
-  } else {
-    llvm::outs() << "no init!\n";
-  }
+  Rewriter.InsertText(InsertLoc, SuggestedFixString);
 }
 
-void IfStmtVarHandler::run(
-    const clang::ast_matchers::MatchFinder::MatchResult &) {
-  llvm::outs() << "if stmt matched!\n";
-  // TODO
+void CompoundStmtVarHandler::run(
+    const clang::ast_matchers::MatchFinder::MatchResult &Result) {
+  handleUnusedDeclaration(Result, /*inIf*/ false, Rewriter);
+}
+
+void IfStmtVarHandler::run(const MatchResult &Result) {
+  handleUnusedDeclaration(Result, /*inIf*/ true, Rewriter);
 }
 
 SilencerASTConsumer::SilencerASTConsumer(clang::Rewriter &Rewriter)
     : Rewriter(Rewriter), ParamHandler(Rewriter), IfStmtVarHandler(Rewriter),
       CompoundStmtVarHandler(Rewriter) {
+  // clang-format off
   DeclarationMatcher FunctionMatcher =
-      functionDecl(isDefinition(), unless(isImplicit()),
-                   hasAnyParameter(anything()))
-          .bind("fn");
-  // Finder.addMatcher(FunctionMatcher, &ParamHandler);
+    functionDecl(
+      isDefinition(),
+      unless(isImplicit()),
+      hasAnyParameter(anything()))
+   .bind("fn");
 
   DeclarationMatcher VarInIf =
-      varDecl(hasParent(declStmt(hasParent(ifStmt())))).bind("varInIf");
-  // Finder.addMatcher(VarInIf, &IfStmtVarHandler);
+    varDecl(
+      hasParent(
+        declStmt(hasParent(ifStmt())
+      ).bind(PARENT_BINDING))
+    ).bind(VAR_BINDING);
 
   DeclarationMatcher VarInCompound =
-      varDecl(unless(parmVarDecl()), unless(VarInIf), isDefinition(),
-              hasParent(declStmt().bind("parent")),
-              hasAncestor(functionDecl(isDefinition())))
-          .bind("varInCompound");
+    varDecl(
+      unless(VarInIf),
+      unless(parmVarDecl()),
+      isDefinition(),
+      hasAncestor(functionDecl(isDefinition())),
+      hasParent(declStmt().bind(PARENT_BINDING))
+    ).bind(VAR_BINDING);
+
+  // clang-format on
+  Finder.addMatcher(VarInIf, &IfStmtVarHandler);
   Finder.addMatcher(VarInCompound, &CompoundStmtVarHandler);
+  Finder.addMatcher(FunctionMatcher, &ParamHandler);
 }
 
 void SilencerASTConsumer::HandleTranslationUnit(clang::ASTContext &Ctx) {

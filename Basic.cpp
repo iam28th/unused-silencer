@@ -1,8 +1,7 @@
-// #include <utility>
-
+// TODO split into sep tests
 int func(int x, int y);
 
-int func(int x, int y) {
+int func(int x, int y, int w) {
   int z = func(x, y);
   static int z1 = 0;
 

@@ -1,0 +1,16 @@
+@HEADER@
+
+config.llvm_tools_dir = "@SILENCER_LLVM_TOOLS_DIR@"
+config.plugin_lib_dir = "@CMAKE_LIBRARY_OUTPUT_DIRECTORY@"
+
+import lit.llvm
+
+# lit_config is a global instance of LitConfig (c)
+lit.llvm.initialize(lit_config, config)
+
+# test_exec_root: The root path where tests should be run;
+# current binary dir is where the generated site config is located
+config.test_exec_root = "@CMAKE_CURRENT_BINARY_DIR@"
+
+# Let the main config do the real work (c)
+lit_config.load_config(config, "@SILENCER_TEST_SOURCE_DIR@/lit.cfg.py")

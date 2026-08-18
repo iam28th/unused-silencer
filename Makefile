@@ -30,7 +30,7 @@ build: conf
 	cmake --build build -j2 --verbose
 
 plugin_name := silencer
-input := tests/Basic.cpp
+input := Basic.cpp
 
 run: build
 	$(CLANG_FOR_TESTS) -c \
@@ -38,21 +38,14 @@ run: build
 		-Xclang -load -Xclang $(PLUGIN) -Xclang -plugin -Xclang $(plugin_name) \
 		$(input) 2>&1 | c++filt
 
-# -fplugin-arg-$(plugin_name)-inplace \
+# to modify source code in-place, add:
+# -fplugin-arg-$(plugin_name)-inplace
 
 ast:
 	clang -Xclang -ast-dump -fsyntax-only $(input)
 
 query:
 	clang-query -f tests/matcher.cq $(input) --
-
-# alternative ways to launch plugin
-run-cc1: build
-	$(CLANG_FOR_TESTS) -cc1 \
-		-load $(PLUGIN) -plugin $(plugin_name) \
-		-fcolor-diagnostics \
-		-fixit \
-		$(input)
 
 # --show-all is needed to, well, show commands for all tests,
 #  while just -v shows commands only if test fails

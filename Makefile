@@ -10,7 +10,7 @@ PLUGIN := build/lib/libSilencer.so
 
 $(PLUGIN): build
 
-.PHONY: conf build clean run run-cc1 lit ast query
+.PHONY: conf build clean run lit ast query
 conf:
 		cmake -S . -B build \
 		-G 'Unix Makefiles' \
@@ -30,7 +30,7 @@ build: conf
 	cmake --build build -j2 --verbose
 
 plugin_name := silencer
-input := Basic.cpp
+input := tests/plugin/FunctionLocal.cpp
 
 run: build
 	$(CLANG_FOR_TESTS) -c \

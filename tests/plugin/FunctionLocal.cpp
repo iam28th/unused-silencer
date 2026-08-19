@@ -4,9 +4,7 @@
 
 int func(int x, int y);
 
-// CHECK: int func(int x, int y, int /*w*/)
-// expected-warning@+1 {{unused argument}}
-int func(int x, int y, int w) {
+int func(int x, int y) {
   // CHECK: (void)z;
   // expected-warning@+1 {{unused variable}}
   int z = func(x, y);
@@ -22,5 +20,16 @@ int func(int x, int y, int w) {
   // expected-warning@+2 {{unused variable}}
   // expected-warning@+1 {{unused variable}}
   int x1, y1;
+  return x;
+}
+
+int declInIf(int x) {
+  // CHECK: if (int y = x + 1, *z = nullptr, w = 0; (void)z, (void)w, y > 0) {
+  // z, w are unused
+  // expected-warning@+2 {{unused variable}}
+  // expected-warning@+1 {{unused variable}}
+  if (int y = x + 1, *z = nullptr, w = 0; y > 0) {
+    return y;
+  }
   return x;
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "PluginActionShared.h"
+
 #include <clang/AST/ASTConsumer.h>
 #include <clang/ASTMatchers/ASTMatchFinder.h>
 #include <clang/ASTMatchers/ASTMatchers.h>
@@ -54,19 +56,16 @@ private:
   CompoundStmtVarHandler CompoundStmtVarHandler;
 };
 
-class SilencerPluginAction : public clang::PluginASTAction {
+/// Can't use the same plugin action class for both clang plugin and
+/// a standalone tool because of different way they get options
+class SilencerPluginAction_Plugin : public SilencerPluginActionShared {
 public:
   bool ParseArgs(const clang::CompilerInstance &,
                  const std::vector<std::string> &) override;
 
-  // Returns our ASTConsumer per translation unit.
-  std::unique_ptr<clang::ASTConsumer>
-  CreateASTConsumer(clang::CompilerInstance &CI, llvm::StringRef file) override;
-
-  /// A hook that runs after TU was finished
+  /// A hook that runs after TU processing was finished
   void EndSourceFileAction() override;
 
 private:
-  clang::Rewriter Rewriter;
   bool ModifyInputInplace = false;
 };

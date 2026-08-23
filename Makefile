@@ -10,14 +10,14 @@ PLUGIN := build/lib/libSilencer.so
 
 $(PLUGIN): build
 
-.PHONY: conf build clean run lit ast query
+.PHONY: conf build clean lit ast query
 conf:
 		cmake -S . -B build \
 		-G 'Unix Makefiles' \
 		-DCMAKE_BUILD_TYPE=Debug \
 		\
 		-DCMAKE_LINKER_TYPE=LLD \
- 		-DCMAKE_CXX_COMPILER=$(shell which clang) \
+ 		-DCMAKE_CXX_COMPILER=$(shell which clang++) \
 		-DCMAKE_C_COMPILER=$(shell which clang) \
 		\
 		-DCMAKE_PREFIX_PATH=$(LLVM_DIR) \
@@ -28,15 +28,22 @@ clean:
 
 build: conf
 	cmake --build build -j2 --verbose
+	mv build/silencer_tool/silencer .
 
 plugin_name := silencer
 input := tests/plugin/FunctionLocal.cpp
 
-run: build
+.PHONY: run-plugin
+run-plugin: build
 	$(CLANG_FOR_TESTS) -c \
 		-fdiagnostics-color=always \
 		-Xclang -load -Xclang $(PLUGIN) -Xclang -plugin -Xclang $(plugin_name) \
 		$(input) 2>&1 | c++filt
+
+.PHONY: run-tool
+run-tool: build
+	./silencer $(input)
+
 
 # to modify source code in-place, add:
 # -fplugin-arg-$(plugin_name)-inplace

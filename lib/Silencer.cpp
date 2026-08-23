@@ -121,7 +121,7 @@ void SilencerASTConsumer::HandleTranslationUnit(clang::ASTContext &Ctx) {
   Finder.matchAST(Ctx);
 }
 
-bool SilencerPluginAction::ParseArgs(const CompilerInstance &,
+bool SilencerPluginAction_Plugin::ParseArgs(const CompilerInstance &,
                                      const std::vector<std::string> &args) {
   for (const auto &arg : args) {
     if (arg == "inplace") {
@@ -131,14 +131,7 @@ bool SilencerPluginAction::ParseArgs(const CompilerInstance &,
   return true;
 }
 
-std::unique_ptr<clang::ASTConsumer>
-SilencerPluginAction::CreateASTConsumer(clang::CompilerInstance &CI,
-                                        llvm::StringRef file) {
-  Rewriter.setSourceMgr(CI.getSourceManager(), CI.getLangOpts());
-  return std::make_unique<SilencerASTConsumer>(Rewriter);
-}
-
-void SilencerPluginAction::EndSourceFileAction() {
+void SilencerPluginAction_Plugin::EndSourceFileAction() {
   if (ModifyInputInplace) {
     Rewriter.overwriteChangedFiles();
   } else {
@@ -150,7 +143,7 @@ void SilencerPluginAction::EndSourceFileAction() {
 //-----------------------------------------------------------------------------
 // Registration
 //-----------------------------------------------------------------------------
-static FrontendPluginRegistry::Add<SilencerPluginAction>
+static FrontendPluginRegistry::Add<SilencerPluginAction_Plugin>
     X(/*Name=*/"silencer",
       /*Desc=*/"Rewrites code so that there's no warning about unused local "
                "variables or function args");

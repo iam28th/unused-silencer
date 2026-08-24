@@ -121,8 +121,8 @@ void SilencerASTConsumer::HandleTranslationUnit(clang::ASTContext &Ctx) {
   Finder.matchAST(Ctx);
 }
 
-bool SilencerPluginAction_Plugin::ParseArgs(const CompilerInstance &,
-                                     const std::vector<std::string> &args) {
+bool SilencerPluginAction_Plugin::ParseArgs(
+    const CompilerInstance &, const std::vector<std::string> &args) {
   for (const auto &arg : args) {
     if (arg == "inplace") {
       ModifyInputInplace = true;
@@ -144,6 +144,6 @@ void SilencerPluginAction_Plugin::EndSourceFileAction() {
 // Registration
 //-----------------------------------------------------------------------------
 static FrontendPluginRegistry::Add<SilencerPluginAction_Plugin>
-    X(/*Name=*/"silencer",
+    X(/*Name=*/"silencer_plugin",
       /*Desc=*/"Rewrites code so that there's no warning about unused local "
                "variables or function args");

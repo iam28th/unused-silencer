@@ -28,9 +28,8 @@ clean:
 
 build: conf
 	cmake --build build -j2 --verbose
-	mv build/silencer_tool/silencer .
 
-plugin_name := silencer
+plugin_name := silencer_plugin
 input := tests/plugin/FunctionLocal.cpp
 
 .PHONY: run-plugin
@@ -42,7 +41,7 @@ run-plugin: build
 
 .PHONY: run-tool
 run-tool: build
-	./silencer $(input)
+	build/bin/silencer tests/tool/FunctionLocal.cpp --
 
 
 # to modify source code in-place, add:
@@ -59,3 +58,7 @@ query:
 lit: build
 	lit --show-suites build/tests
 	lit -v --show-all build/tests
+
+.PHONY: lit-tool
+lit-tool: build
+	lit -v --show-all --filter tool/FunctionLocal.cpp build/tests

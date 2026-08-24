@@ -2,6 +2,7 @@
 
 config.llvm_tools_dir = "@SILENCER_LLVM_TOOLS_DIR@"
 config.plugin_lib_dir = "@CMAKE_LIBRARY_OUTPUT_DIRECTORY@"
+config.plugin_tool_dir = "@CMAKE_RUNTIME_OUTPUT_DIRECTORY@"
 
 import lit.llvm
 

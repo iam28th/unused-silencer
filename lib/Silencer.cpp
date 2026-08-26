@@ -11,8 +11,9 @@ using namespace ast_matchers;
 
 using MatchResult = clang::ast_matchers::MatchFinder::MatchResult;
 
-constexpr static char VAR_BINDING[] = "var";
-constexpr static char PARENT_BINDING[] = "parent";
+constexpr static char VarBinding[] = "var";
+constexpr static char ParentBinding[] = "parent";
+constexpr static char IfBinding[] = "if";
 
 void ParamHandler::run(const MatchResult &Result) {
   ASTContext *Ctx = Result.Context;
@@ -46,15 +47,20 @@ void ParamHandler::run(const MatchResult &Result) {
   }
 }
 
-static void handleUnusedDeclaration(const MatchResult &Result, bool inIf,
-                                    clang::Rewriter &Rewriter) {
-  const VarDecl *Var = Result.Nodes.getNodeAs<clang::VarDecl>(VAR_BINDING);
+/// Handles case when creating a new scope is not required for insertion
+///
+/// \param inIf true if match is in the beginning of if statement (when we need
+/// to end insertion with comma)
+static void handleDeclarationWithoutNewScope(const MatchResult &Result,
+                                             bool inIf,
+                                             clang::Rewriter &Rewriter) {
+  const VarDecl *Var = Result.Nodes.getNodeAs<clang::VarDecl>(VarBinding);
   assert(Var && "nullptr in matcher callback");
   if (Var->isReferenced())
     return;
 
   const DeclStmt *Parent =
-      Result.Nodes.getNodeAs<clang::DeclStmt>(PARENT_BINDING);
+      Result.Nodes.getNodeAs<clang::DeclStmt>(ParentBinding);
   assert(Parent && "parent can't be null");
 
   const std::string SuggestedFixString =
@@ -75,13 +81,59 @@ static void handleUnusedDeclaration(const MatchResult &Result, bool inIf,
   Rewriter.InsertText(InsertLoc, SuggestedFixString);
 }
 
+/// Handles case when we need to insert a new scope around declaration
+static void handleDeclarationWithNewScope(const MatchResult &Result,
+                                          clang::Rewriter &Rewriter) {
+  const VarDecl *Var = Result.Nodes.getNodeAs<clang::VarDecl>(VarBinding);
+  assert(Var && "nullptr in matcher callback");
+  if (Var->isReferenced())
+    return;
+
+  const DeclStmt *Parent =
+      Result.Nodes.getNodeAs<clang::DeclStmt>(ParentBinding);
+  assert(Parent && "parent can't be null");
+
+  ASTContext *Ctx = Result.Context;
+  const auto &SM = Ctx->getSourceManager();
+
+  const std::string DeclString{SM.getCharacterData(Parent->getBeginLoc()),
+                               SM.getCharacterData(Parent->getEndLoc())};
+
+  const std::string SuggestedFixString =
+      (Twine("{ ") + DeclString + "; (void)" + Var->getNameAsString() + "; }")
+          .str();
+  auto InsertLoc = Parent->getBeginLoc();
+
+  FixItHint Hint = FixItHint::CreateInsertion(InsertLoc, SuggestedFixString);
+
+  DiagnosticsEngine &DiagEngine = Ctx->getDiagnostics();
+  unsigned DiagID =
+      DiagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "unused variable");
+
+  DiagEngine.Report(Var->getLocation(), DiagID).AddFixItHint(Hint);
+
+  auto ReplactedTextLength =
+      DeclString.length() + 1; // + 1 for original semicolon
+  Rewriter.ReplaceText(Parent->getBeginLoc(), ReplactedTextLength,
+                       SuggestedFixString);
+}
+
 void CompoundStmtVarHandler::run(
     const clang::ast_matchers::MatchFinder::MatchResult &Result) {
-  handleUnusedDeclaration(Result, /*inIf*/ false, Rewriter);
+  handleDeclarationWithoutNewScope(Result, /*inIf*/ false, Rewriter);
 }
 
 void IfStmtVarHandler::run(const MatchResult &Result) {
-  handleUnusedDeclaration(Result, /*inIf*/ true, Rewriter);
+  const IfStmt *If = Result.Nodes.getNodeAs<clang::IfStmt>(IfBinding);
+  const DeclStmt *Parent =
+      Result.Nodes.getNodeAs<clang::DeclStmt>(ParentBinding);
+  assert(If && "nullptr in matcher callback");
+  assert(Parent && "nullptr in matcher callback");
+
+  if (If->getInit() == llvm::dyn_cast<Stmt>(Parent))
+    handleDeclarationWithoutNewScope(Result, /*inIf*/ true, Rewriter);
+  else
+    handleDeclarationWithNewScope(Result, Rewriter);
 }
 
 SilencerASTConsumer::SilencerASTConsumer(clang::Rewriter &Rewriter)
@@ -98,9 +150,9 @@ SilencerASTConsumer::SilencerASTConsumer(clang::Rewriter &Rewriter)
   DeclarationMatcher VarInIf =
     varDecl(
       hasParent(
-        declStmt(hasParent(ifStmt())
-      ).bind(PARENT_BINDING))
-    ).bind(VAR_BINDING);
+        declStmt(hasParent(ifStmt().bind(IfBinding))
+      ).bind(ParentBinding))
+    ).bind(VarBinding);
 
   DeclarationMatcher VarInCompound =
     varDecl(
@@ -108,8 +160,8 @@ SilencerASTConsumer::SilencerASTConsumer(clang::Rewriter &Rewriter)
       unless(parmVarDecl()),
       isDefinition(),
       hasAncestor(functionDecl(isDefinition())),
-      hasParent(declStmt().bind(PARENT_BINDING))
-    ).bind(VAR_BINDING);
+      hasParent(declStmt().bind(ParentBinding))
+    ).bind(VarBinding);
 
   // clang-format on
   Finder.addMatcher(VarInIf, &IfStmtVarHandler);
@@ -140,9 +192,6 @@ void SilencerPluginAction_Plugin::EndSourceFileAction() {
   }
 }
 
-//-----------------------------------------------------------------------------
-// Registration
-//-----------------------------------------------------------------------------
 static FrontendPluginRegistry::Add<SilencerPluginAction_Plugin>
     X(/*Name=*/"silencer_plugin",
       /*Desc=*/"Rewrites code so that there's no warning about unused local "

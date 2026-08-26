@@ -4,15 +4,17 @@
 int makeX();
 
 int func() {
-  // expected-warning@+2 {{unused variable}}
   if (true)
+    // expected-warning@+2 {{unused variable}}
+    // CHECK: { int x = makeX(); (void)x; }
     int x = makeX();
 
   if (int x = 0; x != 28)
     ++x;
 
-  // expected-warning@+2 {{unused variable}}
   if (int y = 0; y == 0)
+    // expected-warning@+2 {{unused variable}}
+    // CHECK: { int x = makeX(); (void)x; }
     int x = makeX();
 
   return 0;

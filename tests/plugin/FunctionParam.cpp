@@ -12,10 +12,10 @@ int func(int x, int y, int w) {
 }
 
 struct ClsWithInlineMethods {
-  // ClsWithInlineMethods(int /*x*/) {};
+  // CHECK: ClsWithInlineMethods(int /*x*/)
   // expected-warning@+1 {{unused argument}}
   ClsWithInlineMethods(int x) {};
-  // int foo(int /*x*/) {};
+  // CHECK: int foo(int /*x*/)
   // expected-warning@+1 {{unused argument}}
   int foo(int x) { return 0; }
 };

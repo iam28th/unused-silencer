@@ -34,7 +34,7 @@ build:
 	cmake --build build -j$(JOBS) --verbose
 
 plugin_name := silencer_plugin
-input := tests/plugin/FunctionLocal.cpp
+INPUT := tests/plugin/FunctionLocal.cpp
 
 # to modify source code in-place, add:
 # -fplugin-arg-$(plugin_name)-inplace
@@ -43,23 +43,24 @@ run-plugin: build
 	$(CLANG_FOR_TESTS) -c \
 		-fdiagnostics-color=always \
 		-Xclang -load -Xclang $(PLUGIN) -Xclang -plugin -Xclang $(plugin_name) \
-		$(input) 2>&1 | c++filt
+		$(INPUT) 2>&1 | c++filt
 
 .PHONY: run-tool
 run-tool: build
-	build/bin/silencer tests/tool/FunctionLocal.cpp --
+	build/bin/silencer $(INPUT) --
 
 ast:
-	clang -Xclang -ast-dump -fsyntax-only $(input)
+	clang -Xclang -ast-dump -fsyntax-only $(INPUT)
 
 query:
-	clang-query -f tests/matcher.cq $(input) --
+	clang-query -f tests/matcher.cq $(INPUT) --
 
 # --show-all is needed to, well, show commands for all tests,
 #  while just -v shows commands only if test fails
+lit: FILTER ?= ".*"
 lit: build
 	lit --show-suites build/tests
-	lit -v --show-all build/tests
+	lit -v --show-all --filter $(FILTER) build/tests
 
 .PHONY: lit-tool
 lit-tool: build

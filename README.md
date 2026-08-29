@@ -17,7 +17,7 @@ int hello() {
 ->
 int hello() {
     int ret = printf("hello world");
-    void(ret);
+    (void)ret;
 }
 
 
@@ -35,7 +35,7 @@ if (condition)
     int ret = printf("hello world");
 ->
 if (condition)
-    { int ret = printf("hello world"); void(ret); }  // formatting is out of scope...
+    { int ret = printf("hello world"); (void)ret; }  // formatting is out of scope...
 ```
 
 Made for educational purposes.

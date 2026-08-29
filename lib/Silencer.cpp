@@ -21,8 +21,6 @@ void ParamHandler::run(const MatchResult &Result) {
   const FunctionDecl *Fn = Result.Nodes.getNodeAs<clang::FunctionDecl>("fn");
   assert(Fn && "nullptr in matcher callback");
 
-  auto &SourceMgr = Rewriter.getSourceMgr();
-
   const int N = Fn->getNumParams();
   for (int i = 0; i < N; ++i) {
     const ParmVarDecl *Parm = Fn->getParamDecl(i);

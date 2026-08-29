@@ -1,5 +1,4 @@
-// RUN: %silencer_as_plugin %s
-// COM: RUN: %silencer_as_plugin %s | grep -v CHECK | FileCheck %s
+// RUN: %silencer_as_plugin %s | grep -v CHECK | FileCheck %s
 
 int makeX();
 

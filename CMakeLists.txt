@@ -22,7 +22,7 @@ message(STATUS "Clang include dirs: ${CLANG_INCLUDE_DIRS}")
 # - consistency is good n'all, but also modules will fail to load otherwise ...
 message(STATUS "LLVM_ENABLE_RTTI: ${LLVM_ENABLE_RTTI}")
 if(NOT LLVM_ENABLE_RTTI)
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
+  add_compile_options(-fno-rtti)
 	message(STATUS "rtti disabled")
 else ()
 	message(STATUS "rtti enabled")

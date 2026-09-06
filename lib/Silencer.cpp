@@ -1,5 +1,7 @@
 #include "Silencer.h"
 
+#include "Matchers.h"
+
 #include <clang/ASTMatchers/ASTMatchers.h>
 #include <clang/Frontend/FrontendAction.h>
 #include <clang/Frontend/FrontendPluginRegistry.h>
@@ -10,10 +12,6 @@ using namespace clang;
 using namespace ast_matchers;
 
 using MatchResult = clang::ast_matchers::MatchFinder::MatchResult;
-
-constexpr static char VarBinding[] = "var";
-constexpr static char ParentBinding[] = "parent";
-constexpr static char IfBinding[] = "if";
 
 void ParamHandler::run(const MatchResult &Result) {
   ASTContext *Ctx = Result.Context;
@@ -137,31 +135,6 @@ void IfStmtVarHandler::run(const MatchResult &Result) {
 SilencerASTConsumer::SilencerASTConsumer(clang::Rewriter &Rewriter)
     : Rewriter(Rewriter), ParamHandler(Rewriter), IfStmtVarHandler(Rewriter),
       CompoundStmtVarHandler(Rewriter) {
-  // clang-format off
-  DeclarationMatcher FunctionMatcher =
-    functionDecl(
-      isDefinition(),
-      unless(isImplicit()),
-      hasAnyParameter(anything()))
-   .bind("fn");
-
-  DeclarationMatcher VarInIf =
-    varDecl(
-      hasParent(
-        declStmt(hasParent(ifStmt().bind(IfBinding))
-      ).bind(ParentBinding))
-    ).bind(VarBinding);
-
-  DeclarationMatcher VarInCompound =
-    varDecl(
-      unless(VarInIf),
-      unless(parmVarDecl()),
-      isDefinition(),
-      hasAncestor(functionDecl(isDefinition())),
-      hasParent(declStmt().bind(ParentBinding))
-    ).bind(VarBinding);
-
-  // clang-format on
   Finder.addMatcher(VarInIf, &IfStmtVarHandler);
   Finder.addMatcher(VarInCompound, &CompoundStmtVarHandler);
   Finder.addMatcher(FunctionMatcher, &ParamHandler);

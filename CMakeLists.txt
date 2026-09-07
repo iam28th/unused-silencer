@@ -30,5 +30,5 @@ endif()
 
 set(SILENCER_PLUGIN_SONAME Silencer)
 add_subdirectory(lib)
-add_subdirectory(silencer_tool)
+add_subdirectory(silencer_as_tool)
 add_subdirectory(tests)

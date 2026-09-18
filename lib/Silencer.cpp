@@ -1,5 +1,6 @@
 #include "Silencer.h"
 
+#include "FixItHints.h"
 #include "Matchers.h"
 
 #include <clang/ASTMatchers/ASTMatchers.h>
@@ -16,7 +17,7 @@ using MatchResult = clang::ast_matchers::MatchFinder::MatchResult;
 void ParamHandler::run(const MatchResult &Result) {
   ASTContext *Ctx = Result.Context;
 
-  const FunctionDecl *Fn = Result.Nodes.getNodeAs<clang::FunctionDecl>("fn");
+  const FunctionDecl *Fn = Result.Nodes.getNodeAs<clang::FunctionDecl>(FunctionBinding);
   assert(Fn && "nullptr in matcher callback");
 
   const int N = Fn->getNumParams();
@@ -25,21 +26,13 @@ void ParamHandler::run(const MatchResult &Result) {
     if (Parm->isUsed())
       continue;
 
-    SourceLocation ParmLoc = Parm->getLocation();
-
-    // construct fixit...
-    auto Name = Parm->getNameAsString();
-    const std::string FixItString = (Twine("/*") + Name + ("*/")).str();
-
-    FixItHint FixItHint = FixItHint::CreateReplacement(
-        SourceRange(ParmLoc, ParmLoc.getLocWithOffset(Name.size())),
-        FixItString);
+    auto FixItHint = fixitForUnusedParm(Parm);
 
     DiagnosticsEngine &DiagEngine = Ctx->getDiagnostics();
     unsigned DiagID = DiagEngine.getCustomDiagID(DiagnosticsEngine::Warning,
                                                  "unused argument");
     DiagEngine.Report(Parm->getLocation(), DiagID).AddFixItHint(FixItHint);
-    Rewriter.ReplaceText(ParmLoc, Name.length(), FixItString);
+    Rewriter.ReplaceText(FixItHint.RemoveRange, FixItHint.CodeToInsert);
   }
 }
 
@@ -59,25 +52,20 @@ static void handleDeclarationWithoutNewScope(const MatchResult &Result,
       Result.Nodes.getNodeAs<clang::DeclStmt>(ParentBinding);
   assert(Parent && "parent can't be null");
 
-  const std::string SuggestedFixString =
-      (Twine(" (void)") + Var->getNameAsString() + (inIf ? "," : ";")).str();
+  SourceLocation InsertLoc = insertLocForUnusedLocalVarWithoutNewScopeFixit(Var, Parent, Result.Context);
+  FixItHint Hint = fixitForUnusedLocalVarWithoutNewScope(Var, /*EndChar*/ (inIf ? ',' : ';'), InsertLoc);
 
-  ASTContext *Ctx = Result.Context;
-  const auto &SM = Ctx->getSourceManager();
-  auto InsertLoc = Lexer::getLocForEndOfToken(Parent->getEndLoc(), 0, SM,
-                                              Ctx->getLangOpts());
-  FixItHint Hint = FixItHint::CreateInsertion(InsertLoc, SuggestedFixString);
-
-  DiagnosticsEngine &DiagEngine = Ctx->getDiagnostics();
+  DiagnosticsEngine &DiagEngine = Result.Context->getDiagnostics();
   unsigned DiagID =
       DiagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "unused variable");
-
   DiagEngine.Report(Var->getLocation(), DiagID).AddFixItHint(Hint);
-
-  Rewriter.InsertText(InsertLoc, SuggestedFixString);
+  Rewriter.InsertText(InsertLoc, Hint.CodeToInsert);
 }
 
 /// Handles case when we need to insert a new scope around declaration
+/// Replaces 'auto x = 0' with '{ auto x = 0; (void) x; }'
+///
+/// Currently this works only with single decl
 static void handleDeclarationWithNewScope(const MatchResult &Result,
                                           clang::Rewriter &Rewriter) {
   const VarDecl *Var = Result.Nodes.getNodeAs<clang::VarDecl>(VarBinding);
@@ -92,26 +80,14 @@ static void handleDeclarationWithNewScope(const MatchResult &Result,
   ASTContext *Ctx = Result.Context;
   const auto &SM = Ctx->getSourceManager();
 
-  const std::string DeclString{SM.getCharacterData(Parent->getBeginLoc()),
-                               SM.getCharacterData(Parent->getEndLoc())};
-
-  const std::string SuggestedFixString =
-      (Twine("{ ") + DeclString + "; (void)" + Var->getNameAsString() + "; }")
-          .str();
-  auto InsertLoc = Parent->getBeginLoc();
-
-  FixItHint Hint = FixItHint::CreateInsertion(InsertLoc, SuggestedFixString);
+  FixItHint Hint = fixitForUnusedLocalVarWithNewScope(Var, Parent, Result.Context);
 
   DiagnosticsEngine &DiagEngine = Ctx->getDiagnostics();
   unsigned DiagID =
       DiagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "unused variable");
-
   DiagEngine.Report(Var->getLocation(), DiagID).AddFixItHint(Hint);
 
-  auto ReplactedTextLength =
-      DeclString.length() + 1; // + 1 for original semicolon
-  Rewriter.ReplaceText(Parent->getBeginLoc(), ReplactedTextLength,
-                       SuggestedFixString);
+  Rewriter.ReplaceText(Hint.RemoveRange, Hint.CodeToInsert);
 }
 
 void CompoundStmtVarHandler::run(

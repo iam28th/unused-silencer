@@ -2,10 +2,12 @@ message(DEBUG "LLVM include dirs: " ${LLVM_INCLUDE_DIRS})
 message(DEBUG "CLANG include dirs: " ${CLANG_INCLUDE_DIRS})
 
 set(SILENCER_SOURCES
-  PluginActionShared.cpp
-  Silencer.cpp
+  FixItHints.cpp
+  FixItHints.h
   Matchers.cpp
   Matchers.h
+  PluginActionShared.cpp
+  Silencer.cpp
 )
 
 add_library(${SILENCER_PLUGIN_SONAME} SHARED

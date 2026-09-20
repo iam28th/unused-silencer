@@ -19,6 +19,17 @@ private:
   clang::Rewriter &Rewriter;
 };
 
+class DeclarationStmtHandler : public clang::ast_matchers::MatchFinder::MatchCallback {
+public:
+  DeclarationStmtHandler(clang::Rewriter &Rewriter) : Rewriter(Rewriter) {}
+
+  // Executes whenever the Matcher in SilencerASTConsumer matches.
+  void run(const clang::ast_matchers::MatchFinder::MatchResult &) override;
+
+private:
+  clang::Rewriter &Rewriter;
+};
+
 class CompoundStmtVarHandler
     : public clang::ast_matchers::MatchFinder::MatchCallback {
 public:
@@ -52,6 +63,8 @@ private:
   clang::Rewriter &Rewriter;
 
   ParamHandler ParamHandler;
+  DeclarationStmtHandler DeclarationStmtHandler;
+
   IfStmtVarHandler IfStmtVarHandler;
   CompoundStmtVarHandler CompoundStmtVarHandler;
 };

@@ -83,10 +83,8 @@ std::optional<FixItHint> fixitForLocalVar(const MatchResult &Result, const DeclS
     Hint = FixItHint::CreateInsertion(InsertLoc, FixItString);
   }
 
-  return Hint;
-
   assert(!FixItString.empty());
-
+  return Hint;
 }
 
 void DeclarationStmtHandler::run(const MatchResult &Result) {
@@ -136,6 +134,7 @@ void DeclarationStmtHandler::run(const MatchResult &Result) {
     return;
 
   DiagEngine.Report(Decl->getBeginLoc(), DiagID).AddFixItHint(*Hint);
+  Rewriter.ReplaceText(Hint->RemoveRange, Hint->CodeToInsert);
 }
 
 

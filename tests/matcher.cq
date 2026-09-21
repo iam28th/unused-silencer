@@ -7,20 +7,23 @@ set bind-root false
 #   hasAnyParameter(anything())
 # ).bind("fn")
 
-let declInIfStmt varDecl(
-  hasParent(
-    declStmt(hasParent(ifStmt()))
-  )
-).bind("varInIf")
+# let declInIfStmt varDecl(
+#   hasParent(
+#     declStmt(hasParent(ifStmt()))
+#   )
+# ).bind("varInIf")
 
 # all local variables
-match varDecl(
-  unless(parmVarDecl()),
-  unless(declInIfStmt),
-  isDefinition(),
-  hasAncestor(
-    functionDecl(isDefinition())
-  )
-).bind("normalVar")
+# match varDecl(
+#   unless(parmVarDecl()),
+#   unless(declInIfStmt),
+#   isDefinition(),
+#   hasAncestor(
+#     functionDecl(isDefinition())
+#   )
+# ).bind("normalVar")
 
-match declInIfStmt
+# decl stmt and its parent
+match declStmt(
+  hasParent(stmt())
+).bind("decl")

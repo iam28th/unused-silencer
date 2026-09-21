@@ -30,28 +30,6 @@ private:
   clang::Rewriter &Rewriter;
 };
 
-class CompoundStmtVarHandler
-    : public clang::ast_matchers::MatchFinder::MatchCallback {
-public:
-  CompoundStmtVarHandler(clang::Rewriter &Rewriter) : Rewriter(Rewriter) {}
-
-  void run(const clang::ast_matchers::MatchFinder::MatchResult &) override;
-
-private:
-  clang::Rewriter &Rewriter;
-};
-
-class IfStmtVarHandler
-    : public clang::ast_matchers::MatchFinder::MatchCallback {
-public:
-  IfStmtVarHandler(clang::Rewriter &Rewriter) : Rewriter(Rewriter) {}
-
-  void run(const clang::ast_matchers::MatchFinder::MatchResult &) override;
-
-private:
-  clang::Rewriter &Rewriter;
-};
-
 class SilencerASTConsumer : public clang::ASTConsumer {
 public:
   /// Initializers matchers & registers them with Finder
@@ -64,9 +42,6 @@ private:
 
   ParamHandler ParamHandler;
   DeclarationStmtHandler DeclarationStmtHandler;
-
-  IfStmtVarHandler IfStmtVarHandler;
-  CompoundStmtVarHandler CompoundStmtVarHandler;
 };
 
 /// Can't use the same plugin action class for both clang plugin and

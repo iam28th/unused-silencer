@@ -95,33 +95,28 @@ void DeclarationStmtHandler::run(const MatchResult &Result) {
   unsigned DiagID =
     DiagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "unused variable(s)");
 
-  const DeclStmt *Decl = Result.Nodes.getNodeAs<clang::DeclStmt>("decl");
-  const Stmt *Parent = Result.Nodes.getNodeAs<clang::Stmt>("parent");
+  const DeclStmt *Decl = Result.Nodes.getNodeAs<clang::DeclStmt>(DeclBinding);
+  const Stmt *Parent = Result.Nodes.getNodeAs<clang::Stmt>(ParentBinding);
   assert(Decl && Parent);
+
+  bool supported = false; //!< whether this case for declgroup is currently suported
+  // TODO handle while, switch & for (should be pretty much same as if)
+  std::optional<FixItHint> Hint;
 
   if (llvm::dyn_cast<CompoundStmt>(Parent)) {
     // parent is compund;
+    supported = true;
     // simple case, can be handled by inserting '(void)x;' statement for each unused x
-    auto Hint = fixitForLocalVar(Result, Decl, /*endChar*/';', /*addScope*/false);
-
-    if (Hint.has_value()) {
-      DiagEngine.Report(Decl->getBeginLoc(), DiagID).AddFixItHint(*Hint);
-    }
-    return;
-  }
-
-  if (const IfStmt *If = llvm::dyn_cast<IfStmt>(Parent)) {
+    Hint = fixitForLocalVar(Result, Decl, /*endChar*/';', /*addScope*/false);
+  } else if (const IfStmt *If = llvm::dyn_cast<IfStmt>(Parent)) {
     // parent is if
     const Stmt *Init = If->getInit();
+    supported = true;
 
     if (Init != static_cast<const Stmt *>(Decl)) {
       // we're in the body
       // same as above, but since we're adding more statements, we need to enclode entire result in a new scope
-      auto Hint = fixitForLocalVar(Result, Decl, /*endChar*/ ';', /*addScope*/true);
-      if (Hint.has_value()) {
-        DiagEngine.Report(Decl->getBeginLoc(), DiagID).AddFixItHint(*Hint);
-      }
-      return;
+      Hint = fixitForLocalVar(Result, Decl, /*endChar*/ ';', /*addScope*/true);
     }
 
     // we're in initialization...
@@ -129,102 +124,29 @@ void DeclarationStmtHandler::run(const MatchResult &Result) {
     // we can reuse function that appends stamements after original declGroup,
     // but end each one with a coma instead of semicolon
     // (this is a bit of hack though, but it seems to work)
-    auto Hint = fixitForLocalVar(Result, Decl, /*endChar*/ ',', /*addScope*/false);
-    if (Hint.has_value()) {
-      DiagEngine.Report(Decl->getBeginLoc(), DiagID).AddFixItHint(*Hint);
-    }
+    Hint = fixitForLocalVar(Result, Decl, /*endChar*/ ',', /*addScope*/false);
+  }
+
+  if (!supported) {
+    llvm::errs() << "Unsupported case";
     return;
   }
 
-  // TODO handle while, switch & for (should be pretty much same as if)
-  llvm::errs() << "Unsupported case";
-}
-
-/// Handles case when creating a new scope is not required for insertion
-///
-/// \param inIf true if match is in the beginning of if statement (when we need
-/// to end insertion with comma)
-static void handleDeclarationWithoutNewScope(const MatchResult &Result,
-                                             bool inIf,
-                                             clang::Rewriter &Rewriter) {
-  const VarDecl *Var = Result.Nodes.getNodeAs<clang::VarDecl>(VarBinding);
-  assert(Var && "nullptr in matcher callback");
-  if (Var->isReferenced())
+  if (!Hint.has_value())
     return;
 
-  const DeclStmt *Parent =
-      Result.Nodes.getNodeAs<clang::DeclStmt>(ParentBinding);
-  assert(Parent && "parent can't be null");
-
-  SourceLocation InsertLoc = insertLocForUnusedLocalVarWithoutNewScopeFixit(Var, Parent, Result.Context);
-  FixItHint Hint = fixitForUnusedLocalVarWithoutNewScope(Var, /*EndChar*/ (inIf ? ',' : ';'), InsertLoc);
-
-  DiagnosticsEngine &DiagEngine = Result.Context->getDiagnostics();
-  unsigned DiagID =
-      DiagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "unused variable");
-  DiagEngine.Report(Var->getLocation(), DiagID).AddFixItHint(Hint);
-  Rewriter.InsertText(InsertLoc, Hint.CodeToInsert);
+  DiagEngine.Report(Decl->getBeginLoc(), DiagID).AddFixItHint(*Hint);
 }
 
-/// Handles case when we need to insert a new scope around declaration
-/// Replaces 'auto x = 0' with '{ auto x = 0; (void) x; }'
-///
-/// Currently this works only with single decl
-static void handleDeclarationWithNewScope(const MatchResult &Result,
-                                          clang::Rewriter &Rewriter) {
-  const VarDecl *Var = Result.Nodes.getNodeAs<clang::VarDecl>(VarBinding);
-  assert(Var && "nullptr in matcher callback");
-  if (Var->isReferenced())
-    return;
-
-  const DeclStmt *Parent =
-      Result.Nodes.getNodeAs<clang::DeclStmt>(ParentBinding);
-  assert(Parent && "parent can't be null");
-
-  ASTContext *Ctx = Result.Context;
-  const auto &SM = Ctx->getSourceManager();
-
-  FixItHint Hint = fixitForUnusedLocalVarWithNewScope(Var, Parent, Result.Context);
-
-  DiagnosticsEngine &DiagEngine = Ctx->getDiagnostics();
-  unsigned DiagID =
-      DiagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "unused variable");
-  DiagEngine.Report(Var->getLocation(), DiagID).AddFixItHint(Hint);
-
-  Rewriter.ReplaceText(Hint.RemoveRange, Hint.CodeToInsert);
-}
-
-void CompoundStmtVarHandler::run(
-    const clang::ast_matchers::MatchFinder::MatchResult &Result) {
-  handleDeclarationWithoutNewScope(Result, /*inIf*/ false, Rewriter);
-}
-
-void IfStmtVarHandler::run(const MatchResult &Result) {
-  const IfStmt *If = Result.Nodes.getNodeAs<clang::IfStmt>(IfBinding);
-  If->getInit();
-
-  const DeclStmt *Parent =
-      Result.Nodes.getNodeAs<clang::DeclStmt>(ParentBinding);
-  assert(If && "nullptr in matcher callback");
-  assert(Parent && "nullptr in matcher callback");
-
-  if (If->getInit() == llvm::dyn_cast<Stmt>(Parent))
-    handleDeclarationWithoutNewScope(Result, /*inIf*/ true, Rewriter);
-  else
-    handleDeclarationWithNewScope(Result, Rewriter);
-}
 
 SilencerASTConsumer::SilencerASTConsumer(clang::Rewriter &Rewriter)
-    : Rewriter(Rewriter), DeclarationStmtHandler(Rewriter), ParamHandler(Rewriter), IfStmtVarHandler(Rewriter),
-      CompoundStmtVarHandler(Rewriter) {
-  // Finder.addMatcher(VarInIf, &IfStmtVarHandler);
-  // Finder.addMatcher(VarInCompound, &CompoundStmtVarHandler);
+    : Rewriter(Rewriter), DeclarationStmtHandler(Rewriter), ParamHandler(Rewriter) {
   Finder.addMatcher(FunctionMatcher, &ParamHandler);
 
   Finder.addMatcher(
-      declStmt(
-        hasParent(stmt().bind("parent"))
-      ).bind("decl"), &DeclarationStmtHandler);
+    declStmt(
+      hasParent(stmt().bind(ParentBinding))
+    ).bind("decl"), &DeclarationStmtHandler);
 }
 
 void SilencerASTConsumer::HandleTranslationUnit(clang::ASTContext &Ctx) {
@@ -234,9 +156,8 @@ void SilencerASTConsumer::HandleTranslationUnit(clang::ASTContext &Ctx) {
 bool SilencerPluginAction_Plugin::ParseArgs(
     const CompilerInstance &, const std::vector<std::string> &args) {
   for (const auto &arg : args) {
-    if (arg == "inplace") {
+    if (arg == "inplace")
       ModifyInputInplace = true;
-    }
   }
   return true;
 }

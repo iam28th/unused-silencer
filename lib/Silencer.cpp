@@ -14,8 +14,6 @@
 using namespace clang;
 using namespace ast_matchers;
 
-using MatchResult = clang::ast_matchers::MatchFinder::MatchResult;
-
 void ParamHandler::run(const MatchResult &Result) {
   ASTContext *Ctx = Result.Context;
 
@@ -38,54 +36,6 @@ void ParamHandler::run(const MatchResult &Result) {
   }
 }
 
-template <typename NodeType>
-std::string nodeToSourceString(const NodeType *Node, ASTContext *Context)
-{
-  const auto &SM = Context->getSourceManager();
-  const auto &LangOpts = Context->getLangOpts();
-
-  clang::SourceRange Range = Node->getSourceRange();
-  clang::CharSourceRange CharRange =
-      clang::Lexer::getAsCharRange(Range, SM, LangOpts);
-
-  return std::string{clang::Lexer::getSourceText(CharRange, SM, LangOpts)};
-}
-
-std::optional<FixItHint> fixitForLocalVar(const MatchResult &Result, const DeclStmt *DeclStmt, char endChar, bool addScope) {
-  auto *Ctx = Result.Context;
-
-  DeclGroupRef Group = DeclStmt->getDeclGroup();
-
-  std::vector<const VarDecl *> UnusedVars; /// TODO use llvm container
-
-  for (const Decl* Decl : Group) {
-    const auto *Var = llvm::dyn_cast<const VarDecl>(Decl);
-    if (Var && !Var->isReferenced())
-      UnusedVars.push_back(Var);
-  }
-
-  if (UnusedVars.empty())
-    return std::nullopt;
-
-  std::string FixItString;
-  FixItHint Hint{};
-
-  for (const auto *Var : UnusedVars)
-    FixItString += (Twine(" (void)") + Var->getName() + Twine(endChar)).str();
-
-  if (addScope) {
-    FixItString = (Twine("{ ") + nodeToSourceString(DeclStmt, Ctx) + FixItString + " }").str();
-    Hint = FixItHint::CreateReplacement(DeclStmt->getSourceRange(), FixItString);
-  } else {
-    SourceLocation InsertLoc = Lexer::getLocForEndOfToken(DeclStmt->getEndLoc(), /*offset*/0, Result.Context->getSourceManager(),
-      Result.Context->getLangOpts());
-    Hint = FixItHint::CreateInsertion(InsertLoc, FixItString);
-  }
-
-  assert(!FixItString.empty());
-  return Hint;
-}
-
 void DeclarationStmtHandler::run(const MatchResult &Result) {
   const auto &SM = Result.Context->getSourceManager();
   DiagnosticsEngine &DiagEngine = Result.Context->getDiagnostics();
@@ -96,13 +46,13 @@ void DeclarationStmtHandler::run(const MatchResult &Result) {
   const Stmt *Parent = Result.Nodes.getNodeAs<clang::Stmt>(ParentBinding);
   assert(Decl && Parent);
 
-  // TODO handle while, switch & for (should be pretty much same as if)
+  // TODO handle initializer in while, switch & for (should be pretty much same as if)
   std::optional<FixItHint> Hint;
 
   if (llvm::dyn_cast<CompoundStmt>(Parent)) {
     // parent is compund;
     // simple case, can be handled by inserting '(void)x;' statement for each unused x
-    Hint = fixitForLocalVar(Result, Decl, /*endChar*/';', /*addScope*/false);
+    Hint = fixitForDeclStmt(Result, Decl, /*endChar*/';', /*addScope*/false);
   } else if (const IfStmt *If = llvm::dyn_cast<IfStmt>(Parent)) {
     // parent is if
     const Stmt *Init = If->getInit();
@@ -110,14 +60,14 @@ void DeclarationStmtHandler::run(const MatchResult &Result) {
     if (Init != static_cast<const Stmt *>(Decl)) {
       // we're in the body
       // same as above, but since we're adding more statements, we need to enclode entire result in a new scope
-      Hint = fixitForLocalVar(Result, Decl, /*endChar*/ ';', /*addScope*/true);
+      Hint = fixitForDeclStmt(Result, Decl, /*endChar*/ ';', /*addScope*/true);
     } else {
       // we're in initialization...
       // need to get condition exprssion, and prepend it with '(void)x,' for each x
       // we can reuse function that appends stamements after original declGroup,
       // but end each one with a coma instead of semicolon
       // (this is a bit of hack though, but it seems to work)
-      Hint = fixitForLocalVar(Result, Decl, /*endChar*/ ',', /*addScope*/false);
+      Hint = fixitForDeclStmt(Result, Decl, /*endChar*/ ',', /*addScope*/false);
     }
   } else {
     llvm::errs() << "Unsupported case";

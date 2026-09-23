@@ -8,6 +8,19 @@
 
 using namespace clang;
 
+template <typename NodeType>
+static std::string nodeToSourceString(const NodeType *Node, ASTContext *Context)
+{
+  const auto &SM = Context->getSourceManager();
+  const auto &LangOpts = Context->getLangOpts();
+
+  clang::SourceRange Range = Node->getSourceRange();
+  clang::CharSourceRange CharRange =
+      clang::Lexer::getAsCharRange(Range, SM, LangOpts);
+
+  return std::string{clang::Lexer::getSourceText(CharRange, SM, LangOpts)};
+}
+
 FixItHint fixitForUnusedParm(const ParmVarDecl *Parm) {
     auto Name = Parm->getNameAsString();
     SourceLocation Loc = Parm->getLocation();
@@ -18,31 +31,37 @@ FixItHint fixitForUnusedParm(const ParmVarDecl *Parm) {
         SourceRange(Loc, Parm->getEndLoc()), FixItString);
 }
 
-FixItHint fixitForUnusedLocalVarWithoutNewScope(const VarDecl *Var, char EndChar, SourceLocation InsertLoc) {
-  auto Name = Var->getNameAsString();
+std::optional<FixItHint> fixitForDeclStmt(const MatchResult &Result, const DeclStmt *DeclStmt, char endChar, bool addScope) {
+  auto *Ctx = Result.Context;
 
-  const std::string SuggestedFixString =
-      (Twine(" (void)") + Name + Twine(EndChar)).str();
-  return FixItHint::CreateInsertion(InsertLoc, SuggestedFixString);
-}
+  DeclGroupRef Group = DeclStmt->getDeclGroup();
 
-SourceLocation insertLocForUnusedLocalVarWithoutNewScopeFixit(const VarDecl *Var,
-    const DeclStmt *Parent, ASTContext *Ctx)
-{
-  return Lexer::getLocForEndOfToken(Parent->getEndLoc(), /*offset*/0, Ctx->getSourceManager(),
-      Ctx->getLangOpts());
-}
+  std::vector<const VarDecl *> UnusedVars; /// TODO use llvm container
 
-FixItHint fixitForUnusedLocalVarWithNewScope(const VarDecl *Var,
-    const DeclStmt *Parent, clang::ASTContext *Ctx) {
-  const auto &SM = Ctx->getSourceManager();
+  for (const Decl* Decl : Group) {
+    const auto *Var = llvm::dyn_cast<const VarDecl>(Decl);
+    if (Var && !Var->isReferenced())
+      UnusedVars.push_back(Var);
+  }
 
-  const std::string DeclString{SM.getCharacterData(Parent->getBeginLoc()),
-                               SM.getCharacterData(Parent->getEndLoc())};
+  if (UnusedVars.empty())
+    return std::nullopt;
 
-  const std::string SuggestedFixString =
-      (Twine("{ ") + DeclString + "; (void)" + Var->getNameAsString() + "; }")
-          .str();
+  std::string FixItString;
+  FixItHint Hint{};
 
-  return FixItHint::CreateReplacement(Parent->getSourceRange(), SuggestedFixString);
+  for (const auto *Var : UnusedVars)
+    FixItString += (Twine(" (void)") + Var->getName() + Twine(endChar)).str();
+
+  if (addScope) {
+    FixItString = (Twine("{ ") + nodeToSourceString(DeclStmt, Ctx) + FixItString + " }").str();
+    Hint = FixItHint::CreateReplacement(DeclStmt->getSourceRange(), FixItString);
+  } else {
+    SourceLocation InsertLoc = Lexer::getLocForEndOfToken(DeclStmt->getEndLoc(), /*offset*/0, Result.Context->getSourceManager(),
+      Result.Context->getLangOpts());
+    Hint = FixItHint::CreateInsertion(InsertLoc, FixItString);
+  }
+
+  assert(!FixItString.empty());
+  return Hint;
 }

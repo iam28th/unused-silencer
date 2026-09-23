@@ -54,7 +54,6 @@ std::string nodeToSourceString(const NodeType *Node, ASTContext *Context)
 std::optional<FixItHint> fixitForLocalVar(const MatchResult &Result, const DeclStmt *DeclStmt, char endChar, bool addScope) {
   auto *Ctx = Result.Context;
 
-  llvm::errs() << nodeToSourceString(DeclStmt, Ctx) << '\n';
   DeclGroupRef Group = DeclStmt->getDeclGroup();
 
   std::vector<const VarDecl *> UnusedVars; /// TODO use llvm container
@@ -97,35 +96,30 @@ void DeclarationStmtHandler::run(const MatchResult &Result) {
   const Stmt *Parent = Result.Nodes.getNodeAs<clang::Stmt>(ParentBinding);
   assert(Decl && Parent);
 
-  bool supported = false; //!< whether this case for declgroup is currently suported
   // TODO handle while, switch & for (should be pretty much same as if)
   std::optional<FixItHint> Hint;
 
   if (llvm::dyn_cast<CompoundStmt>(Parent)) {
     // parent is compund;
-    supported = true;
     // simple case, can be handled by inserting '(void)x;' statement for each unused x
     Hint = fixitForLocalVar(Result, Decl, /*endChar*/';', /*addScope*/false);
   } else if (const IfStmt *If = llvm::dyn_cast<IfStmt>(Parent)) {
     // parent is if
     const Stmt *Init = If->getInit();
-    supported = true;
 
     if (Init != static_cast<const Stmt *>(Decl)) {
       // we're in the body
       // same as above, but since we're adding more statements, we need to enclode entire result in a new scope
       Hint = fixitForLocalVar(Result, Decl, /*endChar*/ ';', /*addScope*/true);
+    } else {
+      // we're in initialization...
+      // need to get condition exprssion, and prepend it with '(void)x,' for each x
+      // we can reuse function that appends stamements after original declGroup,
+      // but end each one with a coma instead of semicolon
+      // (this is a bit of hack though, but it seems to work)
+      Hint = fixitForLocalVar(Result, Decl, /*endChar*/ ',', /*addScope*/false);
     }
-
-    // we're in initialization...
-    // need to get condition exprssion, and prepend it with '(void)x,' for each x
-    // we can reuse function that appends stamements after original declGroup,
-    // but end each one with a coma instead of semicolon
-    // (this is a bit of hack though, but it seems to work)
-    Hint = fixitForLocalVar(Result, Decl, /*endChar*/ ',', /*addScope*/false);
-  }
-
-  if (!supported) {
+  } else {
     llvm::errs() << "Unsupported case";
     return;
   }

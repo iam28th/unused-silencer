@@ -7,14 +7,13 @@ int func() {
     // expected-warning@+2 {{unused variable}}
     // CHECK: { int x = makeX(); (void)x; }
     int x = makeX();
-
-  if (int x = 0; x != 28)
-    ++x;
-
-  if (int y = 0; y == 0)
+  else
     // expected-warning@+2 {{unused variable}}
     // CHECK: { int x = makeX(); (void)x; }
     int x = makeX();
+
+  if (int x = 0; x != 28)
+    ++x;
 
   return 0;
 }

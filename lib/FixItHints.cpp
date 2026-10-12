@@ -22,13 +22,9 @@ static std::string nodeToSourceString(const NodeType *Node, ASTContext *Context)
 }
 
 FixItHint fixitForUnusedParm(const ParmVarDecl *Parm) {
-    auto Name = Parm->getNameAsString();
-    SourceLocation Loc = Parm->getLocation();
-
-    const std::string FixItString = (Twine("/*") + Name + ("*/")).str();
-
-    return FixItHint::CreateReplacement(
-        SourceRange(Loc, Parm->getEndLoc()), FixItString);
+  auto Name = Parm->getNameAsString();
+  const std::string FixItString = (Twine("/*") + Name + ("*/")).str();
+  return FixItHint::CreateReplacement(SourceRange(Parm->getLocation()), FixItString);
 }
 
 std::optional<FixItHint> fixitForDeclStmt(const MatchResult &Result, const DeclStmt *DeclStmt, char endChar, bool addScope) {

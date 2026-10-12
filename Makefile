@@ -34,7 +34,7 @@ build:
 	cmake --build build -j$(JOBS) --verbose
 
 plugin_name := silencer_plugin
-INPUT := tests/plugin/FunctionLocal.cpp
+INPUT := tests/plugin/FunctionParam.cpp
 
 # to modify source code in-place, add:
 # -fplugin-arg-$(plugin_name)-inplace

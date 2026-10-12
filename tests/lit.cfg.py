@@ -6,7 +6,7 @@ from lit.llvm import llvm_config
 # lit_config is a global instance of LitConfig (c)
 lit.llvm.initialize(lit_config, config)
 
-config.test_format = lit.formats.ShTest(not llvm_config.use_lit_shell)
+config.test_format = lit.formats.ShTest(execute_external=False)
 
 config.name = 'Silencer'
 

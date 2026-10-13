@@ -64,4 +64,4 @@ lit: build
 
 .PHONY: lit-tool
 lit-tool: build
-	lit -v --show-all --filter tool/FunctionLocal.cpp build/tests
+	lit -v --filter tool/CompoundLocalDecl.cpp build/tests

@@ -23,7 +23,7 @@ void ParamHandler::run(const MatchResult &Result) {
   const int N = Fn->getNumParams();
   for (int i = 0; i < N; ++i) {
     const ParmVarDecl *Parm = Fn->getParamDecl(i);
-    if (Parm->isUsed())
+    if (Parm->isUsed() || Parm->getName().empty())
       continue;
 
     auto FixItHint = fixitForUnusedParm(Parm);

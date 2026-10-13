@@ -60,7 +60,7 @@ query:
 lit: FILTER ?= ".*"
 lit: build
 	lit --show-suites build/tests
-	lit -v --show-all --filter $(FILTER) build/tests
+	lit -v --filter $(FILTER) build/tests
 
 .PHONY: lit-tool
 lit-tool: build
